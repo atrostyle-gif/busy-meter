@@ -57,16 +57,19 @@ export default function App() {
 
     setApprovalLoading(true);
     try {
-      const approvedSnap = await get(ref(db, `approved_editors/${targetUser.uid}`));
+      const [approvedSnap, reqSnap] = await Promise.all([
+        get(ref(db, `approved_editors/${targetUser.uid}`)),
+        get(ref(db, `edit_requests/${targetUser.uid}`)),
+      ]);
       const approved = approvedSnap.val();
+      const req = reqSnap.val();
+
+      // 優先順位:
+      // 1) approved_editors/{uid}.approved === true
+      // 2) それ以外のみ edit_requests を判定
       if (approved?.approved === true) {
         setApprovalStatus(STATUS.APPROVED);
-        return;
-      }
-
-      const reqSnap = await get(ref(db, `edit_requests/${targetUser.uid}`));
-      const req = reqSnap.val();
-      if (req?.status === "pending") {
+      } else if (req?.status === "pending") {
         setApprovalStatus(STATUS.PENDING);
       } else if (req?.status === "denied") {
         setApprovalStatus(STATUS.DENIED);
