@@ -76,6 +76,7 @@ export default function App() {
           jam_level_next_week: payload.jam_level_next_week,
           jam_level_week_after: payload.jam_level_week_after,
           updated_at: new Date().toISOString(),
+          secret: "MY_SECRET_KEY",
         });
 
         showToast(true, "保存しました");
