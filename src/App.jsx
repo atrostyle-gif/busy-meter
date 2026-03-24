@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ref, onValue, update } from "firebase/database";
+import { get, ref, onValue, set, update } from "firebase/database";
 import {
   auth,
   db,
@@ -13,11 +13,13 @@ import "./App.css";
 
 const FACTORIES = ["osaka", "oita", "kochi"];
 const FACTORY_LABELS = { osaka: "大阪工場", oita: "大分工場", kochi: "高知工場" };
-const ALLOWED_EDITOR_EMAILS = [
-  "aaa@company.com",
-  "bbb@company.com",
-  "ccc@gmail.com",
-];
+const STATUS = {
+  GUEST: "guest",
+  REQUESTABLE: "requestable",
+  PENDING: "pending",
+  DENIED: "denied",
+  APPROVED: "approved",
+};
 
 export default function App() {
   const [data, setData] = useState([]);
@@ -28,6 +30,8 @@ export default function App() {
   const [activeFactory, setActiveFactory] = useState("osaka");
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState(STATUS.GUEST);
+  const [approvalLoading, setApprovalLoading] = useState(false);
   /** 再取得時に購読を張り直すためのキー */
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -44,6 +48,43 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  const loadApprovalStatus = useCallback(async (targetUser) => {
+    if (!targetUser?.uid) {
+      setApprovalStatus(STATUS.GUEST);
+      return;
+    }
+
+    setApprovalLoading(true);
+    try {
+      const approvedSnap = await get(ref(db, `approved_editors/${targetUser.uid}`));
+      const approved = approvedSnap.val();
+      if (approved?.approved === true) {
+        setApprovalStatus(STATUS.APPROVED);
+        return;
+      }
+
+      const reqSnap = await get(ref(db, `edit_requests/${targetUser.uid}`));
+      const req = reqSnap.val();
+      if (req?.status === "pending") {
+        setApprovalStatus(STATUS.PENDING);
+      } else if (req?.status === "denied") {
+        setApprovalStatus(STATUS.DENIED);
+      } else {
+        setApprovalStatus(STATUS.REQUESTABLE);
+      }
+    } catch (e) {
+      setApprovalStatus(STATUS.GUEST);
+      showToast(false, e?.message ?? "承認状態の確認に失敗しました");
+    } finally {
+      setApprovalLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    void loadApprovalStatus(user);
+  }, [authReady, loadApprovalStatus, user]);
 
   useEffect(() => {
     setLoading(true);
@@ -86,18 +127,11 @@ export default function App() {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  const canEdit = useMemo(() => {
-    const email = (user?.email ?? "").toLowerCase();
-    return Boolean(email) && ALLOWED_EDITOR_EMAILS.includes(email);
-  }, [user]);
+  const canEdit = approvalStatus === STATUS.APPROVED;
 
   const handleEditorLogin = useCallback(async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const email = (result.user?.email ?? "").toLowerCase();
-      if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
-        showToast(false, "編集権限がありません");
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (err) {
       showToast(false, err?.message ?? "ログインに失敗しました");
     }
@@ -106,48 +140,64 @@ export default function App() {
   const handleLogout = useCallback(async () => {
     try {
       await signOut(auth);
+      setApprovalStatus(STATUS.GUEST);
       showToast(true, "ログアウトしました");
     } catch (err) {
       showToast(false, err?.message ?? "ログアウトに失敗しました");
     }
   }, [showToast]);
 
-  const ensureEditor = useCallback(async () => {
-    if (!authReady) {
-      showToast(false, "認証状態を確認中です");
-      return null;
+  const handleRequestApproval = useCallback(async () => {
+    if (!user?.uid) {
+      showToast(false, "申請にはログインが必要です");
+      return;
     }
-
-    if (user) {
-      const email = (user.email ?? "").toLowerCase();
-      if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
-        showToast(false, "編集権限がありません");
-        return null;
-      }
-      return user;
+    if (approvalStatus === STATUS.PENDING) {
+      showToast(false, "すでに承認待ちです");
+      return;
     }
-
+    if (approvalStatus === STATUS.APPROVED) {
+      showToast(true, "すでに編集可能です");
+      return;
+    }
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const nextUser = result.user ?? null;
-      const email = (nextUser?.email ?? "").toLowerCase();
-      if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
-        showToast(false, "編集権限がありません");
-        return null;
-      }
-      return nextUser;
+      await set(ref(db, `edit_requests/${user.uid}`), {
+        email: user.email ?? "",
+        displayName: user.displayName ?? "",
+        status: "pending",
+        requested_at: new Date().toISOString(),
+      });
+      setApprovalStatus(STATUS.PENDING);
+      showToast(true, "承認申請を送りました");
     } catch (err) {
-      showToast(false, err?.message ?? "ログインに失敗しました");
-      return null;
+      showToast(false, err?.message ?? "承認申請に失敗しました");
     }
-  }, [authReady, showToast, user]);
+  }, [approvalStatus, showToast, user]);
 
   const handleSave = useCallback(
     async (payload) => {
       setSaving(true);
       try {
-        const editor = await ensureEditor();
-        if (!editor) return false;
+        if (!authReady) {
+          showToast(false, "認証状態を確認中です");
+          return false;
+        }
+        if (!user) {
+          showToast(false, "編集するにはログインしてください");
+          return false;
+        }
+        if (approvalStatus === STATUS.PENDING) {
+          showToast(false, "承認待ちです");
+          return false;
+        }
+        if (approvalStatus === STATUS.DENIED) {
+          showToast(false, "編集権限がありません");
+          return false;
+        }
+        if (approvalStatus !== STATUS.APPROVED) {
+          showToast(false, "編集権限を申請してください");
+          return false;
+        }
 
         const machineId = payload.machine_id;
         if (!machineId) throw new Error("machine_id がありません");
@@ -168,7 +218,7 @@ export default function App() {
         setSaving(false);
       }
     },
-    [ensureEditor, showToast]
+    [approvalStatus, authReady, showToast, user]
   );
 
   const byFactory = useMemo(() => {
@@ -194,7 +244,16 @@ export default function App() {
         {authReady && user && (
           <div>
             <span>{user.email}</span>
-            <span>{canEdit ? " (編集可)" : " (閲覧のみ)"}</span>
+            {!approvalLoading && canEdit && <span> (編集可)</span>}
+            {!approvalLoading && approvalStatus === STATUS.PENDING && <span> (承認待ち)</span>}
+            {!approvalLoading && approvalStatus === STATUS.DENIED && <span> (権限なし)</span>}
+            {!approvalLoading && approvalStatus === STATUS.REQUESTABLE && <span> (未承認)</span>}
+            {approvalLoading && <span> (権限確認中)</span>}
+            {approvalStatus === STATUS.REQUESTABLE && !approvalLoading && (
+              <button type="button" onClick={handleRequestApproval}>
+                編集権限を申請
+              </button>
+            )}
             <button type="button" onClick={handleLogout}>
               ログアウト
             </button>
