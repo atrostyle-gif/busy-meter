@@ -1,21 +1,67 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ref, onValue, update } from "firebase/database";
+import { db } from "./firebase";
 import FactorySection from "./components/FactorySection";
-import { useMachineStatus } from "./hooks/useMachineStatus";
 import "./App.css";
 
 const FACTORIES = ["osaka", "oita", "kochi"];
 const FACTORY_LABELS = { osaka: "大阪工場", oita: "大分工場", kochi: "高知工場" };
 
 export default function App() {
-  const { data, loading, error, refetch, saveStatus } = useMachineStatus();
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
   const [saving, setSaving] = useState(false);
   const [activeFactory, setActiveFactory] = useState("osaka");
+  /** 再取得時に購読を張り直すためのキー */
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const showToast = useCallback((success, message) => {
     setToast({ success, message });
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    const statusRef = ref(db, "machine_status");
+
+    const unsubscribe = onValue(
+      statusRef,
+      (snapshot) => {
+        const v = snapshot.val() || {};
+
+        const rows = Object.entries(v).map(([machine_id, item]) => ({
+          machine_id,
+          ...item,
+        }));
+
+        // factory 昇順、sort_order 昇順
+        rows.sort((a, b) => {
+          const fa = a.factory ?? "";
+          const fb = b.factory ?? "";
+          if (fa !== fb) return fa.localeCompare(fb);
+          return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        });
+
+        setData(rows);
+        setLoading(false);
+      },
+      (err) => {
+        setError(err?.message ?? "読み込みに失敗しました");
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [refreshKey]);
+
+  const refetch = useCallback(() => {
+    setError(null);
+    setRefreshKey((k) => k + 1);
   }, []);
 
   const handleSave = useCallback(
@@ -25,11 +71,11 @@ export default function App() {
         const machineId = payload.machine_id;
         if (!machineId) throw new Error("machine_id がありません");
 
-        await saveStatus({
-          machine_id: machineId,
+        await update(ref(db, `machine_status/${machineId}`), {
           jam_level: payload.jam_level,
           jam_level_next_week: payload.jam_level_next_week,
           jam_level_week_after: payload.jam_level_week_after,
+          updated_at: new Date().toISOString(),
         });
 
         showToast(true, "保存しました");
@@ -41,7 +87,7 @@ export default function App() {
         setSaving(false);
       }
     },
-    [showToast, saveStatus]
+    [showToast]
   );
 
   const byFactory = useMemo(() => {
@@ -67,7 +113,7 @@ export default function App() {
         {error && (
           <div className="app__error">
             <p>{error}</p>
-            <button type="button" onClick={() => refetch()}>
+            <button type="button" onClick={refetch}>
               再取得
             </button>
           </div>
