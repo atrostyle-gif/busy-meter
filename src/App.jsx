@@ -14,7 +14,7 @@ import "./App.css";
 
 const FACTORIES = ["osaka", "oita", "kochi"];
 const FACTORY_LABELS = { osaka: "大阪工場", oita: "大分工場", kochi: "高知工場" };
-const ADMIN_EMAILS = ["あなたのメールアドレス"];
+const ADMIN_EMAILS = ["tarowo.h@gmail.com"];
 const STATUS = {
   GUEST: "guest",
   NONE: "none",
