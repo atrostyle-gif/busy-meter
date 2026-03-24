@@ -122,30 +122,28 @@ export default function MachineCard({ row, onSave }) {
   const lockTimeoutRef = useRef(null)
   const [lockKey, setLockKey] = useState(null)
   const [lockValue, setLockValue] = useState(0)
-  const [lockUntil, setLockUntil] = useState(0)
+  const [lockActive, setLockActive] = useState(false)
 
   useEffect(() => {
     if (userEditingRef.current) return
     const v0 = clampRound(row.jam_level ?? 0)
     const v1 = clampRound(row.jam_level_next_week ?? 0)
     const v2 = clampRound(row.jam_level_week_after ?? 0)
-    setJamThisWeek(v0)
-    setJamNextWeek(v1)
-    setJamWeekAfter(v2)
+    queueMicrotask(() => {
+      setJamThisWeek(v0)
+      setJamNextWeek(v1)
+      setJamWeekAfter(v2)
+    })
     lastSavedRef.current = { jam_level: v0, jam_level_next_week: v1, jam_level_week_after: v2 }
     pendingRef.current = { jam_level: v0, jam_level_next_week: v1, jam_level_week_after: v2 }
   }, [row.jam_level, row.jam_level_next_week, row.jam_level_week_after])
 
   useEffect(() => {
-    setDisplayUpdatedAt(row.updated_at ?? null)
+    const nextUpdated = row.updated_at ?? null
+    queueMicrotask(() => {
+      setDisplayUpdatedAt(nextUpdated)
+    })
   }, [row.updated_at])
-
-  useEffect(() => {
-    if (!dragKey) return
-    const onUp = () => handleSliderRelease(dragKey)
-    window.addEventListener('pointerup', onUp)
-    return () => window.removeEventListener('pointerup', onUp)
-  }, [dragKey])
 
   useEffect(() => {
     return () => {
@@ -162,7 +160,7 @@ export default function MachineCard({ row, onSave }) {
 
   /* UI表示用: ロック中は lockValue、否则 raw。非ドラッグ時は jam */
   const displayValues = useMemo(() => {
-    const inLock = (k) => lockKey === k && lockUntil > 0 && Date.now() < lockUntil
+    const inLock = (k) => lockKey === k && lockActive
     const disp = (k, raw) => {
       if (dragKey !== k) return raw
       if (inLock(k)) return lockValue
@@ -173,9 +171,9 @@ export default function MachineCard({ row, onSave }) {
       next_week: disp('next_week', rawValues.next_week),
       week_after: disp('week_after', rawValues.week_after),
     }
-  }, [dragKey, dragValue, jamThisWeek, jamNextWeek, jamWeekAfter, lockKey, lockValue, lockUntil, rawValues.this_week, rawValues.next_week, rawValues.week_after])
+  }, [dragKey, lockActive, lockKey, lockValue, rawValues.this_week, rawValues.next_week, rawValues.week_after])
 
-  const runSave = () => {
+  const runSave = useCallback(() => {
     const p = pendingRef.current
     setSaving(true)
     setSaveError(false)
@@ -197,7 +195,7 @@ export default function MachineCard({ row, onSave }) {
         setSaving(false)
         userEditingRef.current = false
       })
-  }
+  }, [onSave, row.machine_id])
 
   const clearSnapLock = useCallback(() => {
     if (lockTimeoutRef.current) {
@@ -205,7 +203,7 @@ export default function MachineCard({ row, onSave }) {
       lockTimeoutRef.current = null
     }
     setLockKey(null)
-    setLockUntil(0)
+    setLockActive(false)
     lastSnapPointRef.current = null
   }, [])
 
@@ -227,20 +225,19 @@ export default function MachineCard({ row, onSave }) {
     if (entered) {
       lastSnapPointRef.current = snapped
       if (lockTimeoutRef.current) clearTimeout(lockTimeoutRef.current)
-      const until = Date.now() + SNAP_LOCK_MS
       setLockKey(key)
       setLockValue(snapped)
-      setLockUntil(until)
+      setLockActive(true)
       lockTimeoutRef.current = setTimeout(() => {
         lockTimeoutRef.current = null
         setLockKey(null)
-        setLockUntil(0)
+        setLockActive(false)
         lastSnapPointRef.current = null
       }, SNAP_LOCK_MS)
     }
   }
 
-  const handleSliderRelease = (key) => {
+  const handleSliderRelease = useCallback((key) => {
     if (dragKey !== key) return
     const raw = dragValueRef.current
     const rowKey = PERIODS.find((p) => p.key === key).rowKey
@@ -251,7 +248,14 @@ export default function MachineCard({ row, onSave }) {
     setDragKey(null)
     clearSnapLock()
     runSave()
-  }
+  }, [clearSnapLock, dragKey, runSave])
+
+  useEffect(() => {
+    if (!dragKey) return
+    const onUp = () => handleSliderRelease(dragKey)
+    window.addEventListener('pointerup', onUp)
+    return () => window.removeEventListener('pointerup', onUp)
+  }, [dragKey, handleSliderRelease])
 
   const cardStyle = useMemo(() => {
     const v = rawValues.this_week
@@ -282,7 +286,7 @@ export default function MachineCard({ row, onSave }) {
         ['--jam-fill-color']: getGradientColor(r.week_after),
       },
     }
-  }, [displayValues.this_week, displayValues.next_week, displayValues.week_after, rawValues.this_week, rawValues.next_week, rawValues.week_after])
+  }, [displayValues, rawValues])
 
   const updatedAtDisplay = displayUpdatedAt ?? row.updated_at ?? null
 

@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ref, onValue, update } from "firebase/database";
-import { db } from "./firebase";
+import {
+  auth,
+  db,
+  googleProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "./firebase";
 import FactorySection from "./components/FactorySection";
 import "./App.css";
 
 const FACTORIES = ["osaka", "oita", "kochi"];
 const FACTORY_LABELS = { osaka: "大阪工場", oita: "大分工場", kochi: "高知工場" };
+const ALLOWED_EDITOR_EMAILS = [
+  "aaa@company.com",
+  "bbb@company.com",
+  "ccc@gmail.com",
+];
 
 export default function App() {
   const [data, setData] = useState([]);
@@ -14,6 +26,8 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [saving, setSaving] = useState(false);
   const [activeFactory, setActiveFactory] = useState("osaka");
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   /** 再取得時に購読を張り直すためのキー */
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -21,6 +35,14 @@ export default function App() {
     setToast({ success, message });
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      setUser(nextUser);
+      setAuthReady(true);
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -64,10 +86,69 @@ export default function App() {
     setRefreshKey((k) => k + 1);
   }, []);
 
+  const canEdit = useMemo(() => {
+    const email = (user?.email ?? "").toLowerCase();
+    return Boolean(email) && ALLOWED_EDITOR_EMAILS.includes(email);
+  }, [user]);
+
+  const handleEditorLogin = useCallback(async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const email = (result.user?.email ?? "").toLowerCase();
+      if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
+        showToast(false, "編集権限がありません");
+      }
+    } catch (err) {
+      showToast(false, err?.message ?? "ログインに失敗しました");
+    }
+  }, [showToast]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await signOut(auth);
+      showToast(true, "ログアウトしました");
+    } catch (err) {
+      showToast(false, err?.message ?? "ログアウトに失敗しました");
+    }
+  }, [showToast]);
+
+  const ensureEditor = useCallback(async () => {
+    if (!authReady) {
+      showToast(false, "認証状態を確認中です");
+      return null;
+    }
+
+    if (user) {
+      const email = (user.email ?? "").toLowerCase();
+      if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
+        showToast(false, "編集権限がありません");
+        return null;
+      }
+      return user;
+    }
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const nextUser = result.user ?? null;
+      const email = (nextUser?.email ?? "").toLowerCase();
+      if (!ALLOWED_EDITOR_EMAILS.includes(email)) {
+        showToast(false, "編集権限がありません");
+        return null;
+      }
+      return nextUser;
+    } catch (err) {
+      showToast(false, err?.message ?? "ログインに失敗しました");
+      return null;
+    }
+  }, [authReady, showToast, user]);
+
   const handleSave = useCallback(
     async (payload) => {
       setSaving(true);
       try {
+        const editor = await ensureEditor();
+        if (!editor) return false;
+
         const machineId = payload.machine_id;
         if (!machineId) throw new Error("machine_id がありません");
 
@@ -76,7 +157,6 @@ export default function App() {
           jam_level_next_week: payload.jam_level_next_week,
           jam_level_week_after: payload.jam_level_week_after,
           updated_at: new Date().toISOString(),
-          secret: "MY_SECRET_KEY",
         });
 
         showToast(true, "保存しました");
@@ -88,7 +168,7 @@ export default function App() {
         setSaving(false);
       }
     },
-    [showToast]
+    [ensureEditor, showToast]
   );
 
   const byFactory = useMemo(() => {
@@ -106,6 +186,20 @@ export default function App() {
           TETSUYA BUSY METER
         </h1>
         {saving && <span className="app__saving">Saving...</span>}
+        {authReady && !user && (
+          <button type="button" onClick={handleEditorLogin}>
+            編集者ログイン
+          </button>
+        )}
+        {authReady && user && (
+          <div>
+            <span>{user.email}</span>
+            <span>{canEdit ? " (編集可)" : " (閲覧のみ)"}</span>
+            <button type="button" onClick={handleLogout}>
+              ログアウト
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="app__main">
