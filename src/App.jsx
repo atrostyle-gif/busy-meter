@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { get, ref, onValue, set, update } from "firebase/database";
+import { ref, onValue, set, update } from "firebase/database";
 import {
   auth,
   db,
@@ -9,15 +9,17 @@ import {
   signOut,
 } from "./firebase";
 import FactorySection from "./components/FactorySection";
+import AdminPage from "./pages/AdminPage";
 import "./App.css";
 
 const FACTORIES = ["osaka", "oita", "kochi"];
 const FACTORY_LABELS = { osaka: "大阪工場", oita: "大分工場", kochi: "高知工場" };
+const ADMIN_EMAILS = ["あなたのメールアドレス"];
 const STATUS = {
   GUEST: "guest",
-  REQUESTABLE: "requestable",
+  NONE: "none",
   PENDING: "pending",
-  DENIED: "denied",
+  REJECTED: "rejected",
   APPROVED: "approved",
 };
 
@@ -35,6 +37,8 @@ export default function App() {
   const [debugApprovalRaw, setDebugApprovalRaw] = useState(null);
   /** 再取得時に購読を張り直すためのキー */
   const [refreshKey, setRefreshKey] = useState(0);
+  const isAdminPage =
+    typeof window !== "undefined" && window.location.pathname === "/admin";
 
   const showToast = useCallback((success, message) => {
     setToast({ success, message });
@@ -50,56 +54,78 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const loadApprovalStatus = useCallback(async (targetUser) => {
-    if (!targetUser?.uid) {
+  useEffect(() => {
+    if (!authReady) return;
+
+    if (!user?.uid) {
       setApprovalStatus(STATUS.GUEST);
+      setApprovalLoading(false);
+      setDebugApprovalRaw({
+        uid: null,
+        email: null,
+        approvedRaw: null,
+        requestRaw: null,
+      });
       return;
     }
 
     setApprovalLoading(true);
-    try {
-      const [approvedSnap, reqSnap] = await Promise.all([
-        get(ref(db, `approved_editors/${targetUser.uid}`)),
-        get(ref(db, `edit_requests/${targetUser.uid}`)),
-      ]);
-      const approved = approvedSnap.val();
-      const req = reqSnap.val();
-      let nextStatus = STATUS.REQUESTABLE;
+    let approvedRaw = null;
+    let requestRaw = null;
 
-      // 優先順位:
-      // 1) approved_editors/{uid}.approved === true
-      // 2) それ以外のみ edit_requests を判定
-      if (approved?.approved === true) {
-        nextStatus = STATUS.APPROVED;
-      } else if (req?.status === "pending") {
-        nextStatus = STATUS.PENDING;
-      } else if (req?.status === "denied") {
-        nextStatus = STATUS.DENIED;
-      }
+    const computeStatus = () => {
+      const isApproved = approvedRaw === true || approvedRaw?.approved === true;
+      let nextStatus = STATUS.NONE;
+      if (isApproved) nextStatus = STATUS.APPROVED;
+      else if (requestRaw?.status === "rejected") nextStatus = STATUS.REJECTED;
+      else if (requestRaw?.status === "pending") nextStatus = STATUS.PENDING;
+
       console.log("[approval-debug]", {
-        uid: targetUser?.uid ?? null,
-        email: targetUser?.email ?? null,
-        approvedRaw: approved,
-        requestRaw: req,
+        uid: user?.uid ?? null,
+        email: user?.email ?? null,
+        approvedRaw,
+        requestRaw,
         nextStatus,
       });
       setDebugApprovalRaw({
-        uid: targetUser?.uid ?? null,
-        email: targetUser?.email ?? null,
+        uid: user?.uid ?? null,
+        email: user?.email ?? null,
+        approvedRaw,
+        requestRaw,
       });
       setApprovalStatus(nextStatus);
-    } catch (e) {
-      setApprovalStatus(STATUS.GUEST);
-      showToast(false, e?.message ?? "承認状態の確認に失敗しました");
-    } finally {
       setApprovalLoading(false);
-    }
-  }, [showToast]);
+    };
 
-  useEffect(() => {
-    if (!authReady) return;
-    void loadApprovalStatus(user);
-  }, [authReady, loadApprovalStatus, user]);
+    const unsubscribeApproved = onValue(
+      ref(db, `approved_editors/${user.uid}`),
+      (snapshot) => {
+        approvedRaw = snapshot.val();
+        computeStatus();
+      },
+      (err) => {
+        showToast(false, err?.message ?? "承認状態の確認に失敗しました");
+        setApprovalLoading(false);
+      }
+    );
+
+    const unsubscribeRequest = onValue(
+      ref(db, `edit_requests/${user.uid}`),
+      (snapshot) => {
+        requestRaw = snapshot.val();
+        computeStatus();
+      },
+      (err) => {
+        showToast(false, err?.message ?? "承認状態の確認に失敗しました");
+        setApprovalLoading(false);
+      }
+    );
+
+    return () => {
+      unsubscribeApproved();
+      unsubscribeRequest();
+    };
+  }, [authReady, showToast, user?.email, user?.uid]);
 
   useEffect(() => {
     setLoading(true);
@@ -143,6 +169,7 @@ export default function App() {
   }, []);
 
   const canEdit = approvalStatus === STATUS.APPROVED;
+  const isAdmin = Boolean(user?.email) && ADMIN_EMAILS.includes(user.email ?? "");
 
   const handleEditorLogin = useCallback(async () => {
     try {
@@ -205,7 +232,7 @@ export default function App() {
           showToast(false, "承認待ちです");
           return false;
         }
-        if (approvalStatus === STATUS.DENIED) {
+        if (approvalStatus === STATUS.REJECTED) {
           showToast(false, "編集権限がありません");
           return false;
         }
@@ -244,12 +271,24 @@ export default function App() {
     return map;
   }, [data]);
 
+  if (isAdminPage) {
+    return (
+      <AdminPage
+        user={user}
+        isAdmin={isAdmin}
+        onLogin={handleEditorLogin}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <header className="app__header">
         <h1 className="app__title no-translate" translate="no">
           TETSUYA BUSY METER
         </h1>
+        <a href="/admin">管理</a>
         {saving && <span className="app__saving">Saving...</span>}
         {authReady && !user && (
           <button type="button" onClick={handleEditorLogin}>
@@ -261,10 +300,10 @@ export default function App() {
             <span>{user.email}</span>
             {!approvalLoading && canEdit && <span> (編集可)</span>}
             {!approvalLoading && approvalStatus === STATUS.PENDING && <span> (承認待ち)</span>}
-            {!approvalLoading && approvalStatus === STATUS.DENIED && <span> (権限なし)</span>}
-            {!approvalLoading && approvalStatus === STATUS.REQUESTABLE && <span> (未承認)</span>}
+            {!approvalLoading && approvalStatus === STATUS.REJECTED && <span> (権限なし)</span>}
+            {!approvalLoading && approvalStatus === STATUS.NONE && <span> (未承認)</span>}
             {approvalLoading && <span> (権限確認中)</span>}
-            {approvalStatus === STATUS.REQUESTABLE && !approvalLoading && (
+            {approvalStatus === STATUS.NONE && !approvalLoading && (
               <button type="button" onClick={handleRequestApproval}>
                 編集権限を申請
               </button>
