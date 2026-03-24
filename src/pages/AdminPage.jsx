@@ -4,6 +4,7 @@ import { db } from "../firebase";
 
 export default function AdminPage({ user, isAdmin, onLogin, onLogout }) {
   const [requests, setRequests] = useState([]);
+  const [approvedEditors, setApprovedEditors] = useState({});
   const [loading, setLoading] = useState(true);
   const [busyUid, setBusyUid] = useState(null);
   const [error, setError] = useState(null);
@@ -40,6 +41,29 @@ export default function AdminPage({ user, isAdmin, onLogin, onLogout }) {
 
     return () => unsubscribe();
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setApprovedEditors({});
+      return;
+    }
+    const approvedRef = ref(db, "approved_editors");
+    const unsubscribe = onValue(approvedRef, (snapshot) => {
+      setApprovedEditors(snapshot.val() || {});
+    });
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    setRequests((prev) =>
+      prev.map((item) => {
+        const approvedRaw = approvedEditors?.[item.uid];
+        const isApproved = approvedRaw === true || approvedRaw?.approved === true;
+        return isApproved ? { ...item, status: "approved" } : item;
+      })
+    );
+  }, [approvedEditors, isAdmin]);
 
   const sortedRequests = useMemo(() => {
     return [...requests].sort((a, b) => {
@@ -144,22 +168,24 @@ export default function AdminPage({ user, isAdmin, onLogin, onLogout }) {
                       <div>status: {item.status || "-"}</div>
                       <div>requested_at: {item.requested_at || "-"}</div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        disabled={busyUid === item.uid}
-                        onClick={() => handleApprove(item)}
-                      >
-                        承認
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busyUid === item.uid}
-                        onClick={() => handleDeny(item)}
-                      >
-                        却下
-                      </button>
-                    </div>
+                    {item.status === "pending" && (
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          disabled={busyUid === item.uid}
+                          onClick={() => handleApprove(item)}
+                        >
+                          承認
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyUid === item.uid}
+                          onClick={() => handleDeny(item)}
+                        >
+                          却下
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
