@@ -32,6 +32,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState(STATUS.GUEST);
   const [approvalLoading, setApprovalLoading] = useState(false);
+  const [debugApprovalRaw, setDebugApprovalRaw] = useState(null);
   /** 再取得時に購読を張り直すためのキー */
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -63,19 +64,30 @@ export default function App() {
       ]);
       const approved = approvedSnap.val();
       const req = reqSnap.val();
+      let nextStatus = STATUS.REQUESTABLE;
 
       // 優先順位:
       // 1) approved_editors/{uid}.approved === true
       // 2) それ以外のみ edit_requests を判定
       if (approved?.approved === true) {
-        setApprovalStatus(STATUS.APPROVED);
+        nextStatus = STATUS.APPROVED;
       } else if (req?.status === "pending") {
-        setApprovalStatus(STATUS.PENDING);
+        nextStatus = STATUS.PENDING;
       } else if (req?.status === "denied") {
-        setApprovalStatus(STATUS.DENIED);
-      } else {
-        setApprovalStatus(STATUS.REQUESTABLE);
+        nextStatus = STATUS.DENIED;
       }
+      console.log("[approval-debug]", {
+        uid: targetUser?.uid ?? null,
+        email: targetUser?.email ?? null,
+        approvedRaw: approved,
+        requestRaw: req,
+        nextStatus,
+      });
+      setDebugApprovalRaw({
+        uid: targetUser?.uid ?? null,
+        email: targetUser?.email ?? null,
+      });
+      setApprovalStatus(nextStatus);
     } catch (e) {
       setApprovalStatus(STATUS.GUEST);
       showToast(false, e?.message ?? "承認状態の確認に失敗しました");
@@ -262,6 +274,9 @@ export default function App() {
             </button>
           </div>
         )}
+        <div style={{ fontSize: "0.72rem", opacity: 0.75 }}>
+          dbg uid: {debugApprovalRaw?.uid ?? "-"} / email: {debugApprovalRaw?.email ?? "-"} / status: {approvalStatus}
+        </div>
       </header>
 
       <main className="app__main">
