@@ -337,11 +337,31 @@
   flex-shrink: 0;
 }
 
-.machineCard__slider {
-  flex: 0 0 32px;
+/* バー(%表示)とスライダーを同じ場所に重ねるためのスタック */
+.machineCard__jamBarStack {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 28px; /* マウスの当たり判定を広く */
+  display: flex;
+  align-items: center;
+}
+
+.machineCard__jamBarStack .machineCard__jamBar {
   width: 100%;
+}
+
+/* スライダー本体は透明で、バーに重ねる */
+.machineCard__slider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  height: 32px;
+  padding: 0;
   background: transparent;
   cursor: pointer;
   -webkit-appearance: none;
@@ -354,94 +374,86 @@
   outline: none;
 }
 
-/* ===== トラック ===== */
+/* ===== トラックは透明（下のjamBarを見せる） ===== */
 .machineCard__slider::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bar-bg, #3a3a3a);
-  border: 1px solid var(--border-color, #444);
+  height: 10px;
+  background: transparent;
+  border: none;
 }
 
 .machineCard__slider::-moz-range-track {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bar-bg, #3a3a3a);
-  border: 1px solid var(--border-color, #444);
+  height: 10px;
+  background: transparent;
+  border: none;
 }
 
-/* ===== つまみ（大きくして狙いやすく） ===== */
+/* ===== つまみ：バー上に乗る白い丸マーカー ===== */
 .machineCard__slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: #f9a825;
-  border: 3px solid #fff;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.6);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.25),
-    0 2px 6px rgba(0, 0, 0, 0.45);
-  margin-top: -11px; /* トラック(8px) と thumb(28px) の中心合わせ */
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 2px 5px rgba(0, 0, 0, 0.25);
+  margin-top: -5px; /* track(10) と thumb(20) の中心合わせ */
   cursor: grab;
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
-    background-color 0.12s ease-out;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 .machineCard__slider::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: #f9a825;
-  border: 3px solid #fff;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.6);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.25),
-    0 2px 6px rgba(0, 0, 0, 0.45);
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 2px 5px rgba(0, 0, 0, 0.25);
   cursor: grab;
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
-    background-color 0.12s ease-out;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
-/* ホバー時に少し拡大してターゲットしやすく */
+/* ホバーで拡大して狙いやすさアップ */
 .machineCard__slider:hover::-webkit-slider-thumb {
-  transform: scale(1.15);
-  background: #ffb74d;
+  transform: scale(1.2);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 3px 10px rgba(249, 168, 37, 0.55);
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
 .machineCard__slider:hover::-moz-range-thumb {
-  transform: scale(1.15);
-  background: #ffb74d;
+  transform: scale(1.2);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 3px 10px rgba(249, 168, 37, 0.55);
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
-/* アクティブ（掴んでいる）時 */
+/* ドラッグ中 */
 .machineCard__slider:active::-webkit-slider-thumb {
   cursor: grabbing;
-  transform: scale(1.2);
+  transform: scale(1.15);
 }
 
 .machineCard__slider:active::-moz-range-thumb {
   cursor: grabbing;
-  transform: scale(1.2);
+  transform: scale(1.15);
 }
 
-/* キーボードフォーカス時のリング */
+/* キーボードフォーカス */
 .machineCard__slider:focus-visible::-webkit-slider-thumb {
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 0 0 4px rgba(249, 168, 37, 0.35),
-    0 2px 6px rgba(0, 0, 0, 0.45);
+    0 0 0 3px rgba(249, 168, 37, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .machineCard__slider:focus-visible::-moz-range-thumb {
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 0 0 4px rgba(249, 168, 37, 0.35),
-    0 2px 6px rgba(0, 0, 0, 0.45);
+    0 0 0 3px rgba(249, 168, 37, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /* 無効時 */
@@ -456,6 +468,17 @@
 
 .machineCard__slider:disabled::-moz-range-thumb {
   cursor: not-allowed;
+}
+
+/* ライトモードでの色調整 */
+@media (prefers-color-scheme: light) {
+  .machineCard__slider::-webkit-slider-thumb {
+    border-color: rgba(0, 0, 0, 0.45);
+  }
+
+  .machineCard__slider::-moz-range-thumb {
+    border-color: rgba(0, 0, 0, 0.45);
+  }
 }
 
 .machineCard__foot {
@@ -683,24 +706,19 @@
     width: 100%;
   }
 
-  .machineCard__slider {
-    flex: 0 0 auto;
-    width: 100%;
-    min-width: 0;
-    font-size: 16px;
-    min-height: 44px;
-    padding: 0.5rem 0;
+  .machineCard__jamBarStack {
+    min-height: 40px; /* タップしやすい当たり判定 */
   }
 
   .machineCard__slider::-webkit-slider-thumb {
-    width: 34px;
-    height: 34px;
-    margin-top: -13px;
+    width: 24px;
+    height: 24px;
+    margin-top: -7px;
   }
 
   .machineCard__slider::-moz-range-thumb {
-    width: 34px;
-    height: 34px;
+    width: 24px;
+    height: 24px;
   }
 
   .machineCard__select {
@@ -738,20 +756,19 @@
     max-width: 100%;
   }
 
-  .machineCard__slider {
+  .machineCard__jamBarStack {
     min-height: 44px;
-    padding: 0.45rem 0;
   }
 
   .machineCard__slider::-webkit-slider-thumb {
-    width: 36px;
-    height: 36px;
-    margin-top: -14px;
+    width: 26px;
+    height: 26px;
+    margin-top: -8px;
   }
 
   .machineCard__slider::-moz-range-thumb {
-    width: 36px;
-    height: 36px;
+    width: 26px;
+    height: 26px;
   }
 }
 

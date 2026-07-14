@@ -307,21 +307,24 @@ export default function MachineCard({ row, onSave }) {
               <div className="machineCard__jamRow">
                 <label className="machineCard__jamLabel">{label}</label>
                 <div className="machineCard__jamWrap">
-                  <div className="machineCard__jamBar">
-                    <div className="machineCard__jamFill" style={barStyles[key]} />
+                  <div className="machineCard__jamBarStack">
+                    <div className="machineCard__jamBar">
+                      <div className="machineCard__jamFill" style={barStyles[key]} />
+                    </div>
+                    <input
+                      className="machineCard__slider"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={rawVal}
+                      onInput={(e) => handleSliderInput(key, e.target.value)}
+                      disabled={saving}
+                      aria-label={`${label} ${Math.round(displayVal)}%`}
+                    />
                   </div>
                   <span className="machineCard__jamValue">{Math.round(displayVal)}%</span>
                 </div>
-                <input
-                  className="machineCard__slider"
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={rawVal}
-                  onInput={(e) => handleSliderInput(key, e.target.value)}
-                  disabled={saving}
-                />
               </div>
             </div>
           )
