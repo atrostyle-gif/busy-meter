@@ -338,11 +338,124 @@
 }
 
 .machineCard__slider {
-  flex: 0 0 24px;
+  flex: 0 0 32px;
   width: 100%;
   margin: 0;
-  height: 24px;
-  accent-color: #f9a825;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  touch-action: none;
+}
+
+.machineCard__slider:focus {
+  outline: none;
+}
+
+/* ===== トラック ===== */
+.machineCard__slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bar-bg, #3a3a3a);
+  border: 1px solid var(--border-color, #444);
+}
+
+.machineCard__slider::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bar-bg, #3a3a3a);
+  border: 1px solid var(--border-color, #444);
+}
+
+/* ===== つまみ（大きくして狙いやすく） ===== */
+.machineCard__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f9a825;
+  border: 3px solid #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+  margin-top: -11px; /* トラック(8px) と thumb(28px) の中心合わせ */
+  cursor: grab;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
+    background-color 0.12s ease-out;
+}
+
+.machineCard__slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f9a825;
+  border: 3px solid #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
+    background-color 0.12s ease-out;
+}
+
+/* ホバー時に少し拡大してターゲットしやすく */
+.machineCard__slider:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+  background: #ffb74d;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 3px 10px rgba(249, 168, 37, 0.55);
+}
+
+.machineCard__slider:hover::-moz-range-thumb {
+  transform: scale(1.15);
+  background: #ffb74d;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 3px 10px rgba(249, 168, 37, 0.55);
+}
+
+/* アクティブ（掴んでいる）時 */
+.machineCard__slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+.machineCard__slider:active::-moz-range-thumb {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+/* キーボードフォーカス時のリング */
+.machineCard__slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 0 0 4px rgba(249, 168, 37, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.machineCard__slider:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 0 0 4px rgba(249, 168, 37, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+/* 無効時 */
+.machineCard__slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.machineCard__slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+.machineCard__slider:disabled::-moz-range-thumb {
+  cursor: not-allowed;
 }
 
 .machineCard__foot {
@@ -579,6 +692,17 @@
     padding: 0.5rem 0;
   }
 
+  .machineCard__slider::-webkit-slider-thumb {
+    width: 34px;
+    height: 34px;
+    margin-top: -13px;
+  }
+
+  .machineCard__slider::-moz-range-thumb {
+    width: 34px;
+    height: 34px;
+  }
+
   .machineCard__select {
     font-size: 16px;
     padding: 0.5rem 0.6rem;
@@ -617,6 +741,17 @@
   .machineCard__slider {
     min-height: 44px;
     padding: 0.45rem 0;
+  }
+
+  .machineCard__slider::-webkit-slider-thumb {
+    width: 36px;
+    height: 36px;
+    margin-top: -14px;
+  }
+
+  .machineCard__slider::-moz-range-thumb {
+    width: 36px;
+    height: 36px;
   }
 }
 
